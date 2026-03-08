@@ -92,7 +92,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Out of Stock Card */}
+    
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 flex items-center gap-4">
           <div className="bg-red-100 p-4 rounded-xl text-red-600">
             <PackageX size={28} />
