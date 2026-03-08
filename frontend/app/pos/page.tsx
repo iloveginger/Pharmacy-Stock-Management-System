@@ -79,42 +79,60 @@ export default function POSPage() {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 h-[calc(100vh-140px)]">
       {/* Left: Product List */}
-      <div className="lg:col-span-8 flex flex-col space-y-4">
-        <div className="flex justify-between items-center">
-          <h1 className="text-2xl font-bold">Billing Counter</h1>
-          <div className="relative w-72">
-            <Search className="absolute left-3 top-2.5 text-slate-400" size={18} />
-            <input 
-              type="text" 
-              placeholder="Search medicine..." 
-              className="w-full pl-10 pr-4 py-2 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none"
-              onChange={(e) => setSearch(e.target.value)}
-            />
+     <div className="lg:col-span-8 flex flex-col h-full space-y-6">
+  {/* Header Section */}
+  <div className="flex justify-between items-end">
+    <div>
+      <h1 className="text-2xl font-bold text-slate-800">Billing Counter</h1>
+      <p className="text-sm text-slate-500 mt-1">Select medicines to add to the cart</p>
+    </div>
+    <div className="relative w-72">
+      <Search className="absolute left-3 top-2.5 text-slate-400" size={18} />
+      <input 
+        type="text" 
+        placeholder="Search medicine..." 
+        className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all shadow-sm"
+        onChange={(e) => setSearch(e.target.value)}
+      />
+    </div>
+  </div>
+  
+  {/* Medicine Grid */}
+  {/* Added 'min-h-0' and custom scrollbar styles to keep it contained nicely */}
+  <div className="flex-1 min-h-0 overflow-y-auto pr-2 grid grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4 pb-4">
+    {filteredMeds.map((med) => (
+      <button 
+        key={med.id}
+        disabled={med.stock_quantity <= 0}
+        onClick={() => addToCart(med)}
+        className="group relative p-4 border border-slate-200 rounded-2xl bg-white hover:border-blue-300 hover:ring-4 hover:ring-blue-50 transition-all text-left flex flex-col justify-between h-32 disabled:opacity-50 disabled:hover:ring-0 disabled:cursor-not-allowed"
+      >
+        {/* Top: Name & Add Icon */}
+        <div className="w-full flex justify-between items-start gap-2">
+          <div className="flex-1 overflow-hidden">
+            <h3 className="font-semibold text-slate-800 truncate">{med.brand_name}</h3>
+            {/* Added generic name to make it look like a real POS */}
+            <p className="text-xs text-slate-400 truncate mt-0.5">{med.generic_name || "Medicine"}</p>
+          </div>
+          <div className="bg-slate-50 p-1.5 rounded-lg text-slate-400 group-hover:bg-blue-100 group-hover:text-blue-600 transition-colors shrink-0">
+            <Plus size={16} />
           </div>
         </div>
-        
-        <div className="flex-1 overflow-y-auto grid grid-cols-2 xl:grid-cols-3 gap-4 pr-2">
-          {filteredMeds.map((med) => (
-            <button 
-              key={med.id}
-              disabled={med.stock_quantity <= 0}
-              onClick={() => addToCart(med)}
-              className="p-4 border rounded-xl bg-white hover:border-blue-500 hover:shadow-md transition-all text-left group disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <div className="flex justify-between items-start mb-2">
-                <span className="font-bold text-slate-800">{med.brand_name}</span>
-                <Plus size={18} className="text-blue-600 group-hover:scale-110 transition-transform"/>
-              </div>
-              <div className="flex justify-between items-end">
-                <span className={`text-xs ${med.stock_quantity < 10 ? 'text-red-500 font-bold' : 'text-slate-500'}`}>
-                  Stock: {med.stock_quantity}
-                </span>
-                <span className="font-bold text-lg">Rs. {med.price}</span>
-              </div>
-            </button>
-          ))}
+
+        {/* Bottom: Stock Badge & Price */}
+        <div className="w-full flex justify-between items-end mt-4">
+          <span className={`text-[11px] px-2 py-1 rounded-md font-bold uppercase tracking-wider ${
+            med.stock_quantity <= 0 ? 'bg-red-50 text-red-600' :
+            med.stock_quantity < 10 ? 'bg-orange-50 text-orange-600' : 'bg-slate-50 text-slate-600'
+          }`}>
+            {med.stock_quantity <= 0 ? 'Out of Stock' : `${med.stock_quantity} Stock`}
+          </span>
+          <span className="font-bold text-slate-900">Rs. {med.price}</span>
         </div>
-      </div>
+      </button>
+    ))}
+  </div>
+</div>
 
       {/* Right: Cart */}
       <div className="lg:col-span-4 bg-white border rounded-2xl shadow-lg flex flex-col h-full overflow-hidden">

@@ -2,10 +2,10 @@
 
 const API_BASE_URL = "http://localhost:8000"; // Ensure your FastAPI is running on this port
 
-// --- TYPES (Match your FastAPI Pydantic Models) ---
+
 export interface Medicine {
   id: number;
-  brand_name: string; // Using brand_name as per your DB schema
+  brand_name: string; 
   generic_name?: string;
   stock_quantity: number;
   price: number;
@@ -48,7 +48,6 @@ export async function createSale(data: SaleCreate) {
 }
 
 export async function fetchDashboardStats(): Promise<DashboardStats> {
-  // You'll need a specific endpoint for this, or calculate it from other data
   const res = await fetch(`${API_BASE_URL}/dashboard/stats`); 
   if (!res.ok) return { total_items: 0, low_stock: 0, today_sales: 0 };
   return res.json();

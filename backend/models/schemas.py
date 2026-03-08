@@ -34,6 +34,20 @@ class DashboardStats(BaseModel):
     low_stock: int
     today_sales: float
 
+class RecentSale(BaseModel):
+    id: int
+    total_amount: float
+    sale_date: date
+
+class DashboardStats(BaseModel):
+    total_items: int
+    low_stock: int
+    out_of_stock: int      
+    expiring_soon: int     
+    today_sales: float
+    monthly_sales: float
+    recent_sales: List[RecentSale] 
+
 # --- PROFILE SCHEMAS ---
 class ProfileBase(BaseModel):
     username: str
