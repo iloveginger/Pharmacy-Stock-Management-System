@@ -1,74 +1,192 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { ShoppingCart, Plus, Trash2, Search, Receipt } from 'lucide-react';
-import { fetchMedicines, createSale, Medicine } from '@/app/lib/api';
+import { Search, Plus, Minus, Trash2, Receipt, FileText } from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
-// Extended type for Cart Item (Medicine + quantity selected)
+// --- Types ---
+interface Medicine {
+  id: number;
+  brand_name: string;
+  generic_name: string;
+  stock_quantity: number;
+  price: number;
+}
+
 interface CartItem extends Medicine {
   cartQuantity: number;
 }
 
 export default function POSPage() {
   const [medicines, setMedicines] = useState<Medicine[]>([]);
-  const [cart, setCart] = useState<CartItem[]>([]);
   const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [isProcessing, setIsProcessing] = useState(false);
+  
+  // New State for Taxes & Discounts
+  const [discountPercent, setDiscountPercent] = useState<number>(0);
+  const [taxPercent, setTaxPercent] = useState<number>(13); // Default 13% VAT for Nepal
 
-  // Load medicines on mount
   useEffect(() => {
-    fetchMedicines()
-      .then(data => {
-        setMedicines(data);
-        setLoading(false);
-      })
+    fetch("http://localhost:8000/medicines")
+      .then(res => res.json())
+      .then(data => setMedicines(data))
       .catch(err => console.error(err));
   }, []);
 
+  // --- Cart Logic ---
   const addToCart = (med: Medicine) => {
-    const existing = cart.find(item => item.id === med.id);
-    if (existing) {
-      // Check if we have enough stock
-      if (existing.cartQuantity >= med.stock_quantity) {
-        alert("Not enough stock!");
-        return;
+    setCart(prev => {
+      const existing = prev.find(item => item.id === med.id);
+      if (existing) {
+        if (existing.cartQuantity >= med.stock_quantity) return prev;
+        return prev.map(item => item.id === med.id ? { ...item, cartQuantity: item.cartQuantity + 1 } : item);
       }
-      setCart(cart.map(item => item.id === med.id ? { ...item, cartQuantity: item.cartQuantity + 1 } : item));
-    } else {
-      setCart([...cart, { ...med, cartQuantity: 1 }]);
-    }
+      return [...prev, { ...med, cartQuantity: 1 }];
+    });
   };
 
   const removeFromCart = (id: number) => {
-    setCart(cart.filter(item => item.id !== id));
+    setCart(prev => prev.filter(item => item.id !== id));
   };
 
-  const calculateTotal = () => cart.reduce((sum, item) => sum + (item.price * item.cartQuantity), 0);
+  const updateQuantity = (id: number, delta: number) => {
+    setCart(prev => prev.map(item => {
+      if (item.id === id) {
+        const newQty = item.cartQuantity + delta;
+        if (newQty > 0 && newQty <= item.stock_quantity) {
+          return { ...item, cartQuantity: newQty };
+        }
+      }
+      return item;
+    }));
+  };
 
+  // --- Calculations ---
+  const subtotal = cart.reduce((sum, item) => sum + (item.price * item.cartQuantity), 0);
+  const discountAmount = subtotal * (discountPercent / 100);
+  const taxAmount = (subtotal - discountAmount) * (taxPercent / 100);
+  const grandTotal = subtotal - discountAmount + taxAmount;
+
+  // --- PDF Generation ---
+  const generatePDF = (saleId: number) => {
+    const doc = new jsPDF();
+    
+    // Header
+    doc.setFontSize(20);
+    doc.text("Pharmacy Stock Management System", 14, 22);
+    doc.setFontSize(10);
+    doc.text("Kathmandu, Nepal | 9800000000 ", 14, 30);
+    
+    // Invoice Details
+    doc.setFontSize(12);
+    doc.text(`Invoice #: INV-${saleId.toString().padStart(4, '0')}`, 14, 45);
+    doc.text(`Date: ${new Date().toLocaleDateString()}`, 14, 52);
+
+    // Table Data
+    const tableColumn = ["Medicine", "Qty", "Unit Price (Rs)", "Total (Rs)"];
+    const tableRows = cart.map(item => [
+      item.brand_name,
+      item.cartQuantity,
+      item.price.toFixed(2),
+      (item.price * item.cartQuantity).toFixed(2)
+    ]);
+
+    autoTable(doc, {
+      startY: 60,
+      head: [tableColumn],
+      body: tableRows,
+      theme: 'striped',
+      headStyles: { fillColor: [30, 58, 138] }, // Blue-900
+    });
+// --- Totals at the bottom ---
+    const finalY = (doc as any).lastAutoTable.finalY || 60;
+    
+    // We use the standard right margin of the table (usually 196 on A4)
+    const rightMargin = 196; 
+    const labelX = 160; // X position for the labels (Subtotal, Tax, etc.)
+
+    // Set standard font for the breakdown
+    doc.setFontSize(10);
+    doc.setTextColor(100, 116, 139); // Slate-500 (Soft gray for secondary text)
+    
+    // Subtotal
+    doc.text("Subtotal:", labelX, finalY + 10, { align: "right" });
+    doc.setTextColor(15, 23, 42); // Slate-900 (Dark for numbers)
+    doc.text(`Rs. ${subtotal.toFixed(2)}`, rightMargin, finalY + 10, { align: "right" });
+    
+    // Discount
+    doc.setTextColor(100, 116, 139);
+    doc.text(`Discount (${discountPercent}%):`, labelX, finalY + 18, { align: "right" });
+    doc.setTextColor(220, 38, 38); // Red-600 for discounts
+    doc.text(`- Rs. ${discountAmount.toFixed(2)}`, rightMargin, finalY + 18, { align: "right" });
+    
+    // Tax
+    doc.setTextColor(100, 116, 139);
+    doc.text(`Tax (${taxPercent}%):`, labelX, finalY + 26, { align: "right" });
+    doc.setTextColor(15, 23, 42);
+    doc.text(`+ Rs. ${taxAmount.toFixed(2)}`, rightMargin, finalY + 26, { align: "right" });
+    
+    // Divider Line
+    doc.setDrawColor(226, 232, 240); // Slate-200 (Light gray border)
+    doc.setLineWidth(0.5);
+    doc.line(120, finalY + 32, rightMargin, finalY + 32);
+    
+    // Grand Total
+    doc.setFontSize(12);
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(15, 23, 42);
+    
+    doc.text("Grand Total:", labelX, finalY + 40, { align: "right" });
+    doc.text(`Rs. ${grandTotal.toFixed(2)}`, rightMargin, finalY + 40, { align: "right" });
+    
+    // Reset font back to normal just in case you add more stuff later
+    doc.setFont("helvetica", "normal");
+    // Save PDF
+    doc.save(`Invoice_${saleId}.pdf`);
+  };
+
+  // --- Checkout ---
   const handleCheckout = async () => {
     if (cart.length === 0) return;
-    
-    try {
-      const saleData = {
-        total_amount: calculateTotal(),
-        items: cart.map(item => ({
-          medicine_id: item.id,
-          quantity: item.cartQuantity,
-          price_at_sale: item.price
-        }))
-      };
+    setIsProcessing(true);
 
-      await createSale(saleData);
+    const saleData = {
+      total_amount: grandTotal, // Send the final calculated total to backend
+      items: cart.map(item => ({
+        medicine_id: item.id,
+        quantity: item.cartQuantity,
+        price_at_sale: item.price
+      }))
+    };
+
+    try {
+      const res = await fetch("http://localhost:8000/sales", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(saleData)
+      });
+
+      if (!res.ok) throw new Error("Sale failed");
       
-      alert("✅ Sale Recorded Successfully!");
+      // Simulate getting an ID back (since our current backend doesn't return the ID, we use a random one for the PDF)
+      const mockSaleId = Math.floor(Math.random() * 1000); 
+      
+      generatePDF(mockSaleId); // 👈 Generate the PDF!
+      
+      alert("✅ Sale Recorded & Invoice Generated!");
       setCart([]); // Clear cart
-      // Refresh stock data
-      const updatedMeds = await fetchMedicines();
-      setMedicines(updatedMeds);
       
-    } catch (error) {
-      console.error(error);
-      alert("❌ Failed to record sale. Check console.");
+      // Refresh medicines to show new stock
+      const freshMeds = await fetch("http://localhost:8000/medicines").then(res => res.json());
+      setMedicines(freshMeds);
+      
+    } catch (err) {
+      alert("❌ Error processing sale");
+      console.error(err);
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -77,86 +195,79 @@ export default function POSPage() {
   );
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 h-[calc(100vh-140px)]">
-      {/* Left: Product List */}
-     <div className="lg:col-span-8 flex flex-col h-full space-y-6">
-  {/* Header Section */}
-  <div className="flex justify-between items-end">
-    <div>
-      <h1 className="text-2xl font-bold text-slate-800">Billing Counter</h1>
-      <p className="text-sm text-slate-500 mt-1">Select medicines to add to the cart</p>
-    </div>
-    <div className="relative w-72">
-      <Search className="absolute left-3 top-2.5 text-slate-400" size={18} />
-      <input 
-        type="text" 
-        placeholder="Search medicine..." 
-        className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all shadow-sm"
-        onChange={(e) => setSearch(e.target.value)}
-      />
-    </div>
-  </div>
-  
-  {/* Medicine Grid */}
-  {/* Added 'min-h-0' and custom scrollbar styles to keep it contained nicely */}
-  <div className="flex-1 min-h-0 overflow-y-auto pr-2 grid grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4 pb-4">
-    {filteredMeds.map((med) => (
-      <button 
-        key={med.id}
-        disabled={med.stock_quantity <= 0}
-        onClick={() => addToCart(med)}
-        className="group relative p-4 border border-slate-200 rounded-2xl bg-white hover:border-blue-300 hover:ring-4 hover:ring-blue-50 transition-all text-left flex flex-col justify-between h-32 disabled:opacity-50 disabled:hover:ring-0 disabled:cursor-not-allowed"
-      >
-        {/* Top: Name & Add Icon */}
-        <div className="w-full flex justify-between items-start gap-2">
-          <div className="flex-1 overflow-hidden">
-            <h3 className="font-semibold text-slate-800 truncate">{med.brand_name}</h3>
-            {/* Added generic name to make it look like a real POS */}
-            <p className="text-xs text-slate-400 truncate mt-0.5">{med.generic_name || "Medicine"}</p>
+    <div className="max-w-7xl mx-auto h-[calc(100vh-4rem)] flex gap-6 pt-4 pb-8">
+      
+      {/* --- LEFT: INVENTORY GRID --- */}
+      <div className="flex-1 flex flex-col bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden">
+        <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+          <h1 className="text-2xl font-bold text-slate-800">Products</h1>
+          <div className="relative w-64">
+            <Search className="absolute left-3 top-2.5 text-slate-400" size={18} />
+            <input 
+              type="text" 
+              placeholder="Search medicine..." 
+              className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+              onChange={(e) => setSearch(e.target.value)}
+            />
           </div>
-          <div className="bg-slate-50 p-1.5 rounded-lg text-slate-400 group-hover:bg-blue-100 group-hover:text-blue-600 transition-colors shrink-0">
-            <Plus size={16} />
-          </div>
-        </div>
-
-        {/* Bottom: Stock Badge & Price */}
-        <div className="w-full flex justify-between items-end mt-4">
-          <span className={`text-[11px] px-2 py-1 rounded-md font-bold uppercase tracking-wider ${
-            med.stock_quantity <= 0 ? 'bg-red-50 text-red-600' :
-            med.stock_quantity < 10 ? 'bg-orange-50 text-orange-600' : 'bg-slate-50 text-slate-600'
-          }`}>
-            {med.stock_quantity <= 0 ? 'Out of Stock' : `${med.stock_quantity} Stock`}
-          </span>
-          <span className="font-bold text-slate-900">Rs. {med.price}</span>
-        </div>
-      </button>
-    ))}
-  </div>
-</div>
-
-      {/* Right: Cart */}
-      <div className="lg:col-span-4 bg-white border rounded-2xl shadow-lg flex flex-col h-full overflow-hidden">
-        <div className="p-5 border-b bg-slate-50">
-          <h2 className="font-bold flex items-center gap-2"><ShoppingCart size={20}/> Current Bill</h2>
         </div>
         
-        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+        <div className="flex-1 overflow-y-auto p-6 grid grid-cols-2 xl:grid-cols-3 gap-4 content-start">
+          {filteredMeds.map((med) => (
+            <button 
+              key={med.id}
+              disabled={med.stock_quantity <= 0}
+              onClick={() => addToCart(med)}
+              className="group text-left p-4 border border-slate-200 rounded-2xl hover:border-blue-300 hover:ring-4 hover:ring-blue-50 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex flex-col justify-between h-32"
+            >
+              <div className="flex justify-between items-start">
+                <div className="font-semibold text-slate-800 truncate pr-2">{med.brand_name}</div>
+                <div className="bg-slate-50 p-1.5 rounded-lg text-slate-400 group-hover:bg-blue-100 group-hover:text-blue-600 transition-colors">
+                  <Plus size={16} />
+                </div>
+              </div>
+              <div className="flex justify-between items-end mt-2">
+                <span className={`text-[11px] px-2 py-1 rounded-md font-bold uppercase tracking-wider ${
+                  med.stock_quantity <= 0 ? 'bg-red-50 text-red-600' : 'bg-slate-50 text-slate-600'
+                }`}>
+                  {med.stock_quantity <= 0 ? 'Empty' : `${med.stock_quantity} Left`}
+                </span>
+                <span className="font-bold text-slate-900">Rs. {med.price}</span>
+              </div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* --- RIGHT: CART & BILLING --- */}
+      <div className="w-96 bg-white rounded-[2rem] shadow-sm border border-slate-100 flex flex-col overflow-hidden">
+        <div className="p-6 border-b border-slate-100 bg-slate-50 flex items-center gap-3">
+          <Receipt className="text-blue-600" size={24} />
+          <h2 className="text-xl font-bold text-slate-800">Current Bill</h2>
+        </div>
+
+        {/* Cart Items */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-4">
           {cart.length === 0 ? (
-            <div className="text-center text-slate-400 mt-10">
-              <Receipt size={48} className="mx-auto mb-2 opacity-20"/>
-              <p>Empty Cart</p>
+            <div className="h-full flex flex-col items-center justify-center text-slate-400">
+              <Receipt size={48} className="mb-4 opacity-20" />
+              <p>Cart is empty</p>
             </div>
           ) : (
             cart.map((item) => (
-              <div key={item.id} className="flex justify-between items-center bg-slate-50 p-3 rounded-lg">
-                <div>
-                  <div className="font-medium">{item.brand_name}</div>
-                  <div className="text-xs text-slate-500">Rs. {item.price} x {item.cartQuantity}</div>
+              <div key={item.id} className="flex justify-between items-center pb-4 border-b border-slate-100 last:border-0">
+                <div className="flex-1">
+                  <p className="font-semibold text-slate-800">{item.brand_name}</p>
+                  <p className="text-sm text-slate-500">Rs. {item.price} x {item.cartQuantity}</p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="font-bold">Rs. {item.price * item.cartQuantity}</span>
-                  <button onClick={() => removeFromCart(item.id)} className="text-red-400 hover:text-red-600">
-                    <Trash2 size={16}/>
+                  <div className="flex items-center bg-slate-50 rounded-lg border border-slate-200">
+                    <button onClick={() => updateQuantity(item.id, -1)} className="p-1 hover:text-blue-600 transition-colors"><Minus size={16}/></button>
+                    <span className="w-8 text-center font-medium text-sm">{item.cartQuantity}</span>
+                    <button onClick={() => updateQuantity(item.id, 1)} className="p-1 hover:text-blue-600 transition-colors"><Plus size={16}/></button>
+                  </div>
+                  <button onClick={() => removeFromCart(item.id)} className="text-red-400 hover:text-red-600 p-1">
+                    <Trash2 size={18} />
                   </button>
                 </div>
               </div>
@@ -164,17 +275,39 @@ export default function POSPage() {
           )}
         </div>
 
-        <div className="p-5 bg-slate-50 border-t space-y-4">
-          <div className="flex justify-between text-2xl font-black text-slate-800">
-            <span>Total</span>
-            <span>Rs. {calculateTotal()}</span>
+        {/* Totals & Checkout */}
+        <div className="p-6 bg-slate-50 border-t border-slate-100 space-y-4">
+          {/* Tax & Discount Inputs */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Discount (%)</label>
+              <input type="number" min="0" max="100" value={discountPercent} onChange={(e) => setDiscountPercent(Number(e.target.value))} className="w-full mt-1 p-2 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
+            </div>
+            <div>
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Tax (%)</label>
+              <input type="number" min="0" max="100" value={taxPercent} onChange={(e) => setTaxPercent(Number(e.target.value))} className="w-full mt-1 p-2 border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
+            </div>
           </div>
+
+          <div className="space-y-2 text-sm text-slate-600">
+            <div className="flex justify-between"><span>Subtotal</span> <span className="font-medium">Rs. {subtotal.toFixed(2)}</span></div>
+            <div className="flex justify-between text-green-600"><span>Discount</span> <span>- Rs. {discountAmount.toFixed(2)}</span></div>
+            <div className="flex justify-between text-red-500"><span>Tax</span> <span>+ Rs. {taxAmount.toFixed(2)}</span></div>
+          </div>
+          
+          <div className="flex justify-between items-center pt-4 border-t border-slate-200">
+            <span className="font-bold text-slate-800">Grand Total</span>
+            <span className="text-2xl font-black text-blue-600">Rs. {grandTotal.toFixed(2)}</span>
+          </div>
+          
           <button 
-            onClick={handleCheckout}
-            disabled={cart.length === 0}
-            className="w-full bg-blue-600 text-white py-4 rounded-xl font-bold hover:bg-blue-700 disabled:bg-slate-300 disabled:cursor-not-allowed transition-all"
+            onClick={handleCheckout} 
+            disabled={cart.length === 0 || isProcessing}
+            className="w-full mt-4 bg-blue-600 text-white py-4 rounded-xl font-bold text-lg hover:bg-blue-700 transition-all flex justify-center items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg shadow-blue-200"
           >
-            Confirm Sale
+            {isProcessing ? "Processing..." : (
+              <> <FileText size={20} /> Generate Bill & Checkout </>
+            )}
           </button>
         </div>
       </div>
