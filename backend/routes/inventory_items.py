@@ -41,3 +41,35 @@ def delete_medicine(
     db.commit()
     
     return {"message": "Medicine deleted successfully"}
+
+@router.put("/medicines/{medicine_id}")
+def update_medicine(
+    medicine_id: int, 
+    medicine_data: schemas.MedicineCreate, 
+    db: Session = Depends(get_db),
+    current_user: models.Profile = Depends(get_current_user)
+):
+
+    if current_user.role != "Admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, 
+            detail="Access Denied: Only Admins can edit stock."
+        )
+    
+    
+    db_medicine = db.query(models.Medicine).filter(models.Medicine.id == medicine_id).first()
+    if not db_medicine:
+        raise HTTPException(status_code=404, detail="Medicine not found")
+    
+
+    db_medicine.brand_name = medicine_data.brand_name
+    db_medicine.generic_name = medicine_data.generic_name
+    db_medicine.price = medicine_data.price
+    db_medicine.stock_quantity = medicine_data.stock_quantity
+    db_medicine.expiry_date = medicine_data.expiry_date
+    
+
+    db.commit()
+    db.refresh(db_medicine)
+    
+    return db_medicine

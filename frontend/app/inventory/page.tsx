@@ -1,147 +1,213 @@
 "use client";
 
-import { useEffect, useState } from 'react';
-import { Search, AlertCircle, RefreshCw, Plus, X, Save } from 'lucide-react';
-import { fetchMedicines, Medicine } from '@/app/lib/api';
+import { useEffect, useState } from "react";
+import { Search, Plus, Trash2, Edit, X, AlertCircle } from "lucide-react";
 
-// Define the shape of our form data (no ID needed for creation)
-interface NewMedicine {
+interface Medicine {
+  id: number;
   brand_name: string;
   generic_name: string;
-  stock_quantity: number;
   price: number;
+  stock_quantity: number;
   expiry_date: string;
 }
 
 export default function InventoryPage() {
   const [medicines, setMedicines] = useState<Medicine[]>([]);
-  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  
-  // --- MODAL STATE ---
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [formData, setFormData] = useState<NewMedicine>({
-    brand_name: "", generic_name: "", stock_quantity: 0, price: 0, expiry_date: ""
+  const [editingMed, setEditingMed] = useState<Medicine | null>(null);
+  const [formData, setFormData] = useState({
+    brand_name: "",
+    generic_name: "",
+    price: "",
+    stock_quantity: "",
+    expiry_date: "",
   });
 
-  // Load Data
-  const loadData = async () => {
-    setLoading(true);
+  // Load Data and Role
+  useEffect(() => {
+    setUserRole(localStorage.getItem("role"));
+    fetchMedicines();
+  }, []);
+
+  const fetchMedicines = async () => {
     try {
-      const data = await fetchMedicines();
+      const res = await fetch("http://localhost:8000/medicines");
+      const data = await res.json();
       setMedicines(data);
     } catch (err) {
-      console.error(err);
-      alert("Error connecting to backend!");
+      console.error("Failed to fetch medicines", err);
     } finally {
-      setLoading(false);
+      setIsLoading(false);
     }
   };
 
-  useEffect(() => { loadData(); }, []);
+  // --- DELETE LOGIC ---
+  const handleDelete = async (id: number, name: string) => {
+    if (!window.confirm(`Are you sure you want to delete ${name}? This cannot be undone.`)) return;
 
-  // Handle Form Input Change
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: name === 'stock_quantity' || name === 'price' ? parseFloat(value) : value
-    }));
-  };
-
-  // Handle Form Submit
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-
+    const token = localStorage.getItem("token");
     try {
-      const res = await fetch("http://localhost:8000/add", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+      const res = await fetch(`http://localhost:8000/medicines/${id}`, {
+        method: "DELETE",
+        headers: { "Authorization": `Bearer ${token}` }
       });
 
-      if (!res.ok) throw new Error("Failed to add medicine");
+      if (!res.ok) throw new Error("Failed to delete item");
 
-      alert("✅ Medicine Added Successfully!");
-      setIsModalOpen(false);      // Close Modal
-      setFormData({ brand_name: "", generic_name: "", stock_quantity: 0, price: 0, expiry_date: "" }); // Reset Form
-      loadData();                 // Refresh Table
+      setMedicines(prev => prev.filter(med => med.id !== id));
+      
+    } catch (err: any) {
+      alert(`❌ ${err.message}`);
+    }
+  };
 
-    } catch (error) {
-      console.error(error);
-      alert("❌ Error adding medicine. Check backend console.");
-    } finally {
-      setIsSubmitting(false);
+  // --- ADD / EDIT LOGIC ---
+  const openModal = (med: Medicine | null = null) => {
+    if (med) {
+      setEditingMed(med);
+      setFormData({
+        brand_name: med.brand_name,
+        generic_name: med.generic_name || "",
+        price: med.price.toString(),
+        stock_quantity: med.stock_quantity.toString(),
+        expiry_date: med.expiry_date || "",
+      });
+    } else {
+      setEditingMed(null);
+      setFormData({ brand_name: "", generic_name: "", price: "", stock_quantity: "", expiry_date: "" });
+    }
+    setIsModalOpen(true);
+  };
+
+  const handleFormSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const token = localStorage.getItem("token");
+    const url = editingMed 
+      ? `http://localhost:8000/medicines/${editingMed.id}` 
+      : `http://localhost:8000/medicines`;
+    
+    const method = editingMed ? "PUT" : "POST";
+
+    try {
+      const res = await fetch(url, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          brand_name: formData.brand_name,
+          generic_name: formData.generic_name,
+          price: parseFloat(formData.price),
+          stock_quantity: parseInt(formData.stock_quantity),
+          expiry_date: formData.expiry_date || null
+        })
+      });
+
+      if (!res.ok) throw new Error("Failed to save medicine");
+      
+      fetchMedicines(); // Refresh the list
+      setIsModalOpen(false); // Close modal
+    } catch (err: any) {
+      alert(`❌ ${err.message}`);
     }
   };
 
   const filteredMeds = medicines.filter(m => 
-    m.brand_name.toLowerCase().includes(search.toLowerCase())
+    m.brand_name.toLowerCase().includes(search.toLowerCase()) || 
+    (m.generic_name && m.generic_name.toLowerCase().includes(search.toLowerCase()))
   );
 
+  if (isLoading) return <div className="p-8 text-slate-500 font-medium animate-pulse">Loading Inventory...</div>;
+
   return (
-    <div className="space-y-6 relative">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-slate-800">Inventory Management</h1>
+    <div className="max-w-7xl mx-auto space-y-6 pt-4 pb-12">
+      
+      {/* --- HEADER --- */}
+      <div className="flex justify-between items-end">
+        <div>
+          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">Inventory</h1>
+          <p className="text-slate-500 mt-1 font-medium">Manage your medicine stock and pricing</p>
+        </div>
         <div className="flex gap-4">
-          <div className="relative">
+          <div className="relative w-72">
             <Search className="absolute left-3 top-2.5 text-slate-400" size={18} />
             <input 
               type="text" 
-              placeholder="Search stock..." 
-              className="pl-10 pr-4 py-2 border rounded-xl focus:ring-2 focus:ring-blue-500 outline-none w-64"
+              placeholder="Search by brand or generic..." 
+              className="w-full pl-10 pr-4 py-2 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 outline-none shadow-sm transition-all"
+              value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <button onClick={loadData} className="p-2 bg-slate-100 rounded-lg hover:bg-slate-200 transition-colors">
-            <RefreshCw size={20} className={loading ? "animate-spin" : ""} />
-          </button>
-          <button 
-            onClick={() => setIsModalOpen(true)}
-            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors shadow-lg shadow-blue-200"
-          >
-            <Plus size={20} /> Add New
-          </button>
+          {/* Only Admins can add new stock */}
+          {userRole === "Admin" && (
+            <button 
+              onClick={() => openModal()}
+              className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-xl font-semibold flex items-center gap-2 transition-colors shadow-md shadow-blue-200"
+            >
+              <Plus size={18} /> Add Medicine
+            </button>
+          )}
         </div>
       </div>
 
-      {/* TABLE */}
-      <div className="bg-white rounded-xl shadow-sm border overflow-hidden">
-        <table className="w-full text-left">
-          <thead className="bg-slate-50 border-b text-slate-600 text-sm uppercase">
-            <tr>
-              <th className="p-4 font-semibold">Brand Name</th>
-              <th className="p-4 font-semibold">Generic Name</th>
-              <th className="p-4 font-semibold">Stock</th>
-              <th className="p-4 font-semibold">Price (NPR)</th>
-              <th className="p-4 font-semibold">Expiry</th>
-              <th className="p-4 font-semibold">Status</th>
+      {/* --- INVENTORY TABLE --- */}
+      <div className="bg-white rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 overflow-hidden">
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className="bg-slate-50 text-slate-500 text-sm border-b border-slate-100">
+              <th className="font-semibold p-5 uppercase tracking-wider text-xs">Medicine Details</th>
+              <th className="font-semibold p-5 uppercase tracking-wider text-xs">Stock Level</th>
+              <th className="font-semibold p-5 uppercase tracking-wider text-xs">Price</th>
+              <th className="font-semibold p-5 uppercase tracking-wider text-xs">Expiry Date</th>
+              {userRole === "Admin" && <th className="font-semibold p-5 text-right uppercase tracking-wider text-xs">Actions</th>}
             </tr>
           </thead>
           <tbody>
-            {loading ? (
-              <tr><td colSpan={6} className="p-8 text-center text-slate-500">Loading Inventory...</td></tr>
-            ) : filteredMeds.length === 0 ? (
-              <tr><td colSpan={6} className="p-8 text-center text-slate-400">No medicines found.</td></tr>
+            {filteredMeds.length === 0 ? (
+              <tr><td colSpan={5} className="py-12 text-center text-slate-400 font-medium">No medicines found.</td></tr>
             ) : (
               filteredMeds.map((med) => (
-                <tr key={med.id} className="border-b hover:bg-slate-50 transition-colors">
-                  <td className="p-4 font-medium text-slate-900">{med.brand_name}</td>
-                  <td className="p-4 text-slate-500 text-sm">{med.generic_name || "-"}</td>
-                  <td className="p-4 font-mono">{med.stock_quantity}</td>
-                  <td className="p-4 font-mono">Rs. {med.price}</td>
-                  <td className="p-4 text-sm text-slate-500">{new Date(med.expiry_date).toLocaleDateString()}</td>
-                  <td className="p-4">
-                    {med.stock_quantity < 10 ? (
-                      <span className="flex items-center gap-1 text-red-600 bg-red-50 px-2 py-1 rounded-full w-fit font-bold text-xs uppercase">
-                        <AlertCircle size={14}/> Low Stock
-                      </span>
-                    ) : (
-                      <span className="text-green-600 bg-green-50 px-2 py-1 rounded-full w-fit font-bold text-xs uppercase">In Stock</span>
-                    )}
+                <tr key={med.id} className="group hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0">
+                  <td className="p-5">
+                    <p className="font-bold text-slate-900">{med.brand_name}</p>
+                    <p className="text-xs text-slate-500 mt-0.5">{med.generic_name || "N/A"}</p>
                   </td>
+                  <td className="p-5">
+                    <span className={`inline-flex items-center px-3 py-1 rounded-lg text-xs font-bold tracking-wide ${
+                      med.stock_quantity <= 0 ? 'bg-red-50 text-red-600' :
+                      med.stock_quantity < 10 ? 'bg-orange-50 text-orange-600' : 'bg-green-50 text-green-700'
+                    }`}>
+                      {med.stock_quantity <= 0 ? 'Out of Stock' : `${med.stock_quantity} in stock`}
+                    </span>
+                  </td>
+                  <td className="p-5 font-bold text-slate-900">
+                    Rs. {med.price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                  </td>
+                  <td className="p-5 text-sm text-slate-600">
+                    {med.expiry_date ? new Date(med.expiry_date).toLocaleDateString() : 'N/A'}
+                  </td>
+                  
+                  {/* Actions (Admin Only) */}
+                  {userRole === "Admin" && (
+                    <td className="p-5 text-right">
+                      <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => openModal(med)} className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors" title="Edit">
+                          <Edit size={18} />
+                        </button>
+                        <button onClick={() => handleDelete(med.id, med.brand_name)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Delete">
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
+                    </td>
+                  )}
                 </tr>
               ))
             )}
@@ -149,53 +215,53 @@ export default function InventoryPage() {
         </table>
       </div>
 
-      {/* --- ADD MEDICINE MODAL --- */}
+      {/* --- ADD / EDIT MODAL --- */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex justify-center items-center z-50">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 transform transition-all scale-100">
-            <div className="flex justify-between items-center mb-6 border-b pb-4">
-              <h2 className="text-xl font-bold text-slate-800">Add New Medicine</h2>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-red-500 transition-colors">
-                <X size={24} />
-              </button>
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md overflow-hidden">
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+                {editingMed ? <Edit className="text-blue-600" size={20}/> : <Plus className="text-blue-600" size={20}/>}
+                {editingMed ? "Edit Medicine" : "Add New Medicine"}
+              </h2>
+              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-1 bg-white rounded-full shadow-sm"><X size={20}/></button>
             </div>
             
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleFormSubmit} className="p-6 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Brand Name *</label>
+                <input required type="text" value={formData.brand_name} onChange={e => setFormData({...formData, brand_name: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all" />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Generic Name</label>
+                <input type="text" value={formData.generic_name} onChange={e => setFormData({...formData, generic_name: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all" />
+              </div>
               <div className="grid grid-cols-2 gap-4">
-                <div className="col-span-2">
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Brand Name</label>
-                  <input required name="brand_name" value={formData.brand_name} onChange={handleChange} className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="e.g. Nims" />
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Generic Name</label>
-                  <input required name="generic_name" value={formData.generic_name} onChange={handleChange} className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="e.g. Nimesulide" />
+                <div>
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Price (Rs) *</label>
+                  <input required type="number" step="0.01" min="0" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all" />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Stock Qty</label>
-                  <input required type="number" name="stock_quantity" value={formData.stock_quantity || ''} onChange={handleChange} className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="0" />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Price (NPR)</label>
-                  <input required type="number" step="0.01" name="price" value={formData.price || ''} onChange={handleChange} className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" placeholder="0.00" />
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Expiry Date</label>
-                  <input required type="date" name="expiry_date" value={formData.expiry_date} onChange={handleChange} className="w-full p-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none" />
+                  <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Stock Qty *</label>
+                  <input required type="number" min="0" value={formData.stock_quantity} onChange={e => setFormData({...formData, stock_quantity: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all" />
                 </div>
               </div>
-
-              <button 
-                type="submit" 
-                disabled={isSubmitting}
-                className="w-full mt-6 bg-blue-600 text-white py-3 rounded-xl font-bold hover:bg-blue-700 transition-all flex justify-center items-center gap-2 disabled:opacity-70"
-              >
-                {isSubmitting ? <RefreshCw className="animate-spin" /> : <Save size={18} />}
-                {isSubmitting ? "Saving..." : "Save Medicine"}
-              </button>
+              <div>
+                <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Expiry Date</label>
+                <input type="date" value={formData.expiry_date} onChange={e => setFormData({...formData, expiry_date: e.target.value})} className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 outline-none transition-all text-slate-600" />
+              </div>
+              
+              <div className="pt-4 mt-6 border-t border-slate-100 flex justify-end gap-3">
+                <button type="button" onClick={() => setIsModalOpen(false)} className="px-5 py-2.5 text-slate-600 font-semibold hover:bg-slate-100 rounded-xl transition-colors">Cancel</button>
+                <button type="submit" className="px-5 py-2.5 bg-blue-600 text-white font-semibold rounded-xl hover:bg-blue-700 shadow-md shadow-blue-200 transition-all">
+                  {editingMed ? "Save Changes" : "Add Medicine"}
+                </button>
+              </div>
             </form>
           </div>
         </div>
       )}
+
     </div>
   );
 }

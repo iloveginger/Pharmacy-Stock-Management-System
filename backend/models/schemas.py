@@ -8,7 +8,7 @@ class MedicineBase(BaseModel):
     generic_name: Optional[str] = None
     stock_quantity: int
     price: float
-    expiry_date: date
+    expiry_date: Optional[date] = None 
 
 class MedicineCreate(MedicineBase):
     pass
@@ -29,11 +29,6 @@ class SaleCreate(BaseModel):
     items: List[SaleItemCreate] 
 
 # --- DASHBOARD SCHEMAS ---
-class DashboardStats(BaseModel):
-    total_items: int
-    low_stock: int
-    today_sales: float
-
 class RecentSale(BaseModel):
     id: int
     total_amount: float
