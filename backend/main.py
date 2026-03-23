@@ -8,7 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.database import engine, Base
 # Import all our routes
-from backend.routes import inventory_items, sales, dashboard
+from backend.routes import inventory_items, sales, dashboard, auth
 
 # Create Database Tables (if they don't exist)
 Base.metadata.create_all(bind=engine)
@@ -28,6 +28,7 @@ app.add_middleware(
 app.include_router(inventory_items.router)
 app.include_router(sales.router)
 app.include_router(dashboard.router)
+app.include_router(auth.router)
 
 @app.get("/")
 def read_root():
