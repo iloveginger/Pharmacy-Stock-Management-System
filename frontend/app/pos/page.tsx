@@ -239,7 +239,7 @@ export default function POSPage() {
         </div>
       </div>
 
-      {/* --- RIGHT: CART & BILLING --- */}
+    
       <div className="w-96 bg-white rounded-[2rem] shadow-sm border border-slate-100 flex flex-col overflow-hidden">
         <div className="p-6 border-b border-slate-100 bg-slate-50 flex items-center gap-3">
           <Receipt className="text-blue-600" size={24} />
@@ -277,7 +277,7 @@ export default function POSPage() {
 
         {/* Totals & Checkout */}
         <div className="p-6 bg-slate-50 border-t border-slate-100 space-y-4">
-          {/* Tax & Discount Inputs */}
+      
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">Discount (%)</label>

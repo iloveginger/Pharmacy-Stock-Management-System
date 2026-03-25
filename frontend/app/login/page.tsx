@@ -16,7 +16,7 @@ export default function LoginPage() {
     setIsLoading(true);
     setError("");
 
-    // FastAPI's OAuth2 expects Form Data, NOT JSON!
+    
     const formData = new URLSearchParams();
     formData.append("username", username);
     formData.append("password", password);

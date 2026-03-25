@@ -59,7 +59,7 @@ export default function Sidebar() {
         })}
       </nav>
 
-      {/* LOGOUT BUTTON (Pushed to bottom) */}
+      {/* LOGOUT BUTTON  */}
       <div className="pt-6 border-t border-slate-800">
         <button 
           onClick={handleLogout}

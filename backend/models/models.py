@@ -16,7 +16,7 @@ class Medicine(Base):
     brand_name = Column(String, index=True)
     generic_name = Column(String)
     stock_quantity = Column(Integer)
-    price = Column(Float)  # This was the missing column earlier!
+    price = Column(Float)  
     expiry_date = Column(Date)
 
 class Sale(Base):

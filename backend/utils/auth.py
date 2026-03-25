@@ -1,5 +1,7 @@
+import os
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
+from dotenv import load_dotenv
 from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
@@ -7,12 +9,13 @@ from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.models import models
 
-# ⚠️ Secret key for your JWT tokens (In a real app, put this in .env!)
-SECRET_KEY = "super-secret-pharmacy-key" 
-ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 1440 # Token lasts for 24 hours
 
-# Tells FastAPI how to hash passwords safely
+
+load_dotenv()
+SECRET_KEY = os.getenv("SECRET_KEY", "fallback-secret-key-if-env-fails")
+ALGORITHM = os.getenv("ALGORITHM", "HS256")
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))
+
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/login")
 
@@ -28,7 +31,7 @@ def create_access_token(data: dict):
     to_encode.update({"exp": expire})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
-# This is a "Dependency" we will use to lock down routes later!
+
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
