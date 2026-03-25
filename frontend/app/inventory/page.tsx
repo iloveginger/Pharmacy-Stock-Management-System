@@ -63,7 +63,7 @@ export default function InventoryPage() {
       setMedicines(prev => prev.filter(med => med.id !== id));
       
     } catch (err: any) {
-      alert(`❌ ${err.message}`);
+      alert(` ${err.message}`);
     }
   };
 
@@ -115,7 +115,7 @@ export default function InventoryPage() {
       fetchMedicines(); // Refresh the list
       setIsModalOpen(false); // Close modal
     } catch (err: any) {
-      alert(`❌ ${err.message}`);
+      alert(`${err.message}`);
     }
   };
 
@@ -158,7 +158,6 @@ export default function InventoryPage() {
         </div>
       </div>
 
-      {/* --- INVENTORY TABLE --- */}
       <div className="bg-white rounded-[2rem] shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-slate-100 overflow-hidden">
         <table className="w-full text-left border-collapse">
           <thead>
@@ -170,46 +169,87 @@ export default function InventoryPage() {
               {userRole === "Admin" && <th className="font-semibold p-5 text-right uppercase tracking-wider text-xs">Actions</th>}
             </tr>
           </thead>
-          <tbody>
+        <tbody>
             {filteredMeds.length === 0 ? (
               <tr><td colSpan={5} className="py-12 text-center text-slate-400 font-medium">No medicines found.</td></tr>
             ) : (
-              filteredMeds.map((med) => (
-                <tr key={med.id} className="group hover:bg-slate-50 transition-colors border-b border-slate-50 last:border-0">
-                  <td className="p-5">
-                    <p className="font-bold text-slate-900">{med.brand_name}</p>
-                    <p className="text-xs text-slate-500 mt-0.5">{med.generic_name || "N/A"}</p>
-                  </td>
-                  <td className="p-5">
-                    <span className={`inline-flex items-center px-3 py-1 rounded-lg text-xs font-bold tracking-wide ${
-                      med.stock_quantity <= 0 ? 'bg-red-50 text-red-600' :
-                      med.stock_quantity < 10 ? 'bg-orange-50 text-orange-600' : 'bg-green-50 text-green-700'
-                    }`}>
-                      {med.stock_quantity <= 0 ? 'Out of Stock' : `${med.stock_quantity} in stock`}
-                    </span>
-                  </td>
-                  <td className="p-5 font-bold text-slate-900">
-                    Rs. {med.price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-                  </td>
-                  <td className="p-5 text-sm text-slate-600">
-                    {med.expiry_date ? new Date(med.expiry_date).toLocaleDateString() : 'N/A'}
-                  </td>
+              filteredMeds.map((med) => {
+                
+               
+                let isExpiringSoon = false;
+                let isExpired = false;
+
+                if (med.expiry_date) {
+                  const today = new Date();
+                  today.setHours(0, 0, 0, 0);
+                  const expDate = new Date(med.expiry_date);
                   
-                  {/* Actions (Admin Only) */}
-                  {userRole === "Admin" && (
-                    <td className="p-5 text-right">
-                      <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button onClick={() => openModal(med)} className="p-2 text-blue-500 hover:bg-blue-50 rounded-lg transition-colors" title="Edit">
-                          <Edit size={18} />
-                        </button>
-                        <button onClick={() => handleDelete(med.id, med.brand_name)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors" title="Delete">
-                          <Trash2 size={18} />
-                        </button>
-                      </div>
+                  const diffTime = expDate.getTime() - today.getTime();
+                  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+                  if (diffDays < 0) {
+                    isExpired = true; 
+                  } else if (diffDays <= 30) {
+                    isExpiringSoon = true;
+                  }
+                }
+
+                // --- ROW STYLING ---
+                let rowClasses = "group transition-colors border-b border-slate-50 last:border-0 ";
+                if (isExpired) rowClasses += "bg-red-50/60 hover:bg-red-100/60";
+                else if (isExpiringSoon) rowClasses += "bg-orange-50/60 hover:bg-orange-100/60";
+                else rowClasses += "hover:bg-slate-50";
+
+                return (
+                  <tr key={med.id} className={rowClasses}>
+                    <td className="p-5">
+                      <p className="font-bold text-slate-900">{med.brand_name}</p>
+                      <p className="text-xs text-slate-500 mt-0.5">{med.generic_name || "N/A"}</p>
                     </td>
-                  )}
-                </tr>
-              ))
+                    <td className="p-5">
+                      <span className={`inline-flex items-center px-3 py-1 rounded-lg text-xs font-bold tracking-wide ${
+                        med.stock_quantity <= 0 ? 'bg-red-50 text-red-600' :
+                        med.stock_quantity < 10 ? 'bg-orange-50 text-orange-600' : 'bg-green-50 text-green-700'
+                      }`}>
+                        {med.stock_quantity <= 0 ? 'Out of Stock' : `${med.stock_quantity} in stock`}
+                      </span>
+                    </td>
+                    <td className="p-5 font-bold text-slate-900">
+                      Rs. {med.price.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                    </td>
+                    
+                    <td className="p-5 text-sm">
+                      {med.expiry_date ? (
+                        <div className="flex items-center gap-2">
+                          <span className={
+                            isExpired ? "text-red-600 font-bold" : 
+                            isExpiringSoon ? "text-orange-600 font-bold" : 
+                            "text-slate-600"
+                          }>
+                            {new Date(med.expiry_date).toLocaleDateString()}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-slate-400 font-medium">N/A</span>
+                      )}
+                    </td>
+                    
+                    {/* Actions (Admin Only) */}
+                    {userRole === "Admin" && (
+                      <td className="p-5 text-right">
+                        <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <button onClick={() => openModal(med)} className="p-2 text-blue-500 hover:bg-blue-100 rounded-lg transition-colors" title="Edit">
+                            <Edit size={18} />
+                          </button>
+                          <button onClick={() => handleDelete(med.id, med.brand_name)} className="p-2 text-red-500 hover:bg-red-100 rounded-lg transition-colors" title="Delete">
+                            <Trash2 size={18} />
+                          </button>
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                );
+              })
             )}
           </tbody>
         </table>

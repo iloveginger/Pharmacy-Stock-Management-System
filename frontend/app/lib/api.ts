@@ -1,6 +1,6 @@
 // app/lib/api.ts
 
-const API_BASE_URL = "http://localhost:8000"; // Ensure your FastAPI is running on this port
+const API_BASE_URL = "http://localhost:8000"; 
 
 
 export interface Medicine {

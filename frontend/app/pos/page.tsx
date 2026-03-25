@@ -24,9 +24,9 @@ export default function POSPage() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   
-  // New State for Taxes & Discounts
-  const [discountPercent, setDiscountPercent] = useState<number>(0);
-  const [taxPercent, setTaxPercent] = useState<number>(13); // Default 13% VAT for Nepal
+
+  const [discountPercent, setDiscountPercent] = useState<number>(5);
+  const [taxPercent, setTaxPercent] = useState<number>(13); 
 
   useEffect(() => {
     fetch("http://localhost:8000/medicines")
@@ -35,7 +35,7 @@ export default function POSPage() {
       .catch(err => console.error(err));
   }, []);
 
-  // --- Cart Logic ---
+ 
   const addToCart = (med: Medicine) => {
     setCart(prev => {
       const existing = prev.find(item => item.id === med.id);
@@ -103,23 +103,23 @@ export default function POSPage() {
 // --- Totals at the bottom ---
     const finalY = (doc as any).lastAutoTable.finalY || 60;
     
-    // We use the standard right margin of the table (usually 196 on A4)
+    
     const rightMargin = 196; 
-    const labelX = 160; // X position for the labels (Subtotal, Tax, etc.)
+    const labelX = 160; 
 
-    // Set standard font for the breakdown
+  
     doc.setFontSize(10);
-    doc.setTextColor(100, 116, 139); // Slate-500 (Soft gray for secondary text)
+    doc.setTextColor(100, 116, 139); 
     
     // Subtotal
     doc.text("Subtotal:", labelX, finalY + 10, { align: "right" });
-    doc.setTextColor(15, 23, 42); // Slate-900 (Dark for numbers)
+    doc.setTextColor(15, 23, 42); 
     doc.text(`Rs. ${subtotal.toFixed(2)}`, rightMargin, finalY + 10, { align: "right" });
     
     // Discount
     doc.setTextColor(100, 116, 139);
     doc.text(`Discount (${discountPercent}%):`, labelX, finalY + 18, { align: "right" });
-    doc.setTextColor(220, 38, 38); // Red-600 for discounts
+    doc.setTextColor(220, 38, 38); 
     doc.text(`- Rs. ${discountAmount.toFixed(2)}`, rightMargin, finalY + 18, { align: "right" });
     
     // Tax
@@ -129,7 +129,7 @@ export default function POSPage() {
     doc.text(`+ Rs. ${taxAmount.toFixed(2)}`, rightMargin, finalY + 26, { align: "right" });
     
     // Divider Line
-    doc.setDrawColor(226, 232, 240); // Slate-200 (Light gray border)
+    doc.setDrawColor(226, 232, 240);
     doc.setLineWidth(0.5);
     doc.line(120, finalY + 32, rightMargin, finalY + 32);
     
@@ -141,7 +141,7 @@ export default function POSPage() {
     doc.text("Grand Total:", labelX, finalY + 40, { align: "right" });
     doc.text(`Rs. ${grandTotal.toFixed(2)}`, rightMargin, finalY + 40, { align: "right" });
     
-    // Reset font back to normal just in case you add more stuff later
+  
     doc.setFont("helvetica", "normal");
     // Save PDF
     doc.save(`Invoice_${saleId}.pdf`);
@@ -153,7 +153,7 @@ export default function POSPage() {
     setIsProcessing(true);
 
     const saleData = {
-      total_amount: grandTotal, // Send the final calculated total to backend
+      total_amount: grandTotal, 
       items: cart.map(item => ({
         medicine_id: item.id,
         quantity: item.cartQuantity,
@@ -170,20 +170,20 @@ export default function POSPage() {
 
       if (!res.ok) throw new Error("Sale failed");
       
-      // Simulate getting an ID back (since our current backend doesn't return the ID, we use a random one for the PDF)
+      
       const mockSaleId = Math.floor(Math.random() * 1000); 
       
       generatePDF(mockSaleId); // 👈 Generate the PDF!
       
-      alert("✅ Sale Recorded & Invoice Generated!");
+      alert("Sale Recorded & Invoice Generated");
       setCart([]); // Clear cart
       
-      // Refresh medicines to show new stock
+
       const freshMeds = await fetch("http://localhost:8000/medicines").then(res => res.json());
       setMedicines(freshMeds);
       
     } catch (err) {
-      alert("❌ Error processing sale");
+      alert("Error processing sale");
       console.error(err);
     } finally {
       setIsProcessing(false);
@@ -197,7 +197,7 @@ export default function POSPage() {
   return (
     <div className="max-w-7xl mx-auto h-[calc(100vh-4rem)] flex gap-6 pt-4 pb-8">
       
-      {/* --- LEFT: INVENTORY GRID --- */}
+   
       <div className="flex-1 flex flex-col bg-white rounded-[2rem] shadow-sm border border-slate-100 overflow-hidden">
         <div className="p-6 border-b border-slate-100 flex justify-between items-center">
           <h1 className="text-2xl font-bold text-slate-800">Products</h1>
