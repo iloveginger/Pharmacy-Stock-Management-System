@@ -9,8 +9,6 @@ from sqlalchemy.orm import Session
 from backend.database import get_db
 from backend.models import models
 
-
-
 load_dotenv()
 SECRET_KEY = os.getenv("SECRET_KEY", "fallback-secret-key-if-env-fails")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")

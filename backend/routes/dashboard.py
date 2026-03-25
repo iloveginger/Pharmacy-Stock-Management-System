@@ -25,7 +25,7 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
     today_sales = db.query(func.sum(models.Sale.total_amount))\
         .filter(models.Sale.sale_date == today).scalar() or 0.0
         
-    # 👈 NEW: This Month's Revenue
+    #Montly Revenue
     monthly_sales = db.query(func.sum(models.Sale.total_amount))\
         .filter(models.Sale.sale_date >= first_day_of_month).scalar() or 0.0
 
